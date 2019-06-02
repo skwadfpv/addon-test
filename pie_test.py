@@ -2,7 +2,7 @@ bl_info = {
     "name": "Skwad modifiers Pie",
     "description": "Quickly add modifiers in full screen",
     "author": "Skwad and Discord community",
-    "version": (0, 0, 7),
+    "version": (0, 0, 8),
     "blender": (2, 80, 0),
     "location": "",
     "warning": "Use with caution",
@@ -14,6 +14,7 @@ import bpy
 from bpy.types import Operator
 from bpy.types import Menu
 from bpy.types import Panel
+
 
 ##---------------cursor----------------------------------##
 class SK_OT_SmartCursor(Operator):
@@ -35,6 +36,7 @@ class SK_OT_SmartCursor(Operator):
             bpy.ops.view3d.snap_cursor_to_center()
     
         return {'FINISHED'}
+
     
 ## ------------------------------- ADD AN ARRAY MODIFIER WITH AXIS ------------------------ ##
 class AddArray(Operator):
@@ -70,6 +72,7 @@ class AddArray(Operator):
               
         return {'FINISHED'}
     
+     
 ## ---------------------------- ADD A MIRROR MODIFIER WITH AXIS --------------------------- ##
 class OBJECT_OT_AddMirror(Operator):
     bl_idname = "view3d.add_mirror"
@@ -131,7 +134,8 @@ class OBJECT_OT_AddMirror(Operator):
             bpy.context.view_layer.objects.active = obj
         
         return {'FINISHED'}
-   
+
+  
 ## ----------------------------- ADD A BOOLEAN MODIFIER WITH TYPE ------------------------ ##
 class OBJECT_OT_AddBool(Operator):
     bl_idname = "object.add_bool"
@@ -143,11 +147,10 @@ class OBJECT_OT_AddBool(Operator):
     
     def execute(self, context):
         C = bpy.context
-        Ops = bpy.ops.object
+        O = bpy.ops.object
         bool_target = C.active_object
         
 ##------------------------------  S U B T R A C T ----------------------------------------##
-            
         if self.type == 1:
             Boolmod = C.object.modifiers.new("Boo_sub_" + bool_target.name, 'BOOLEAN')
             Boolmod.operation = 'DIFFERENCE'
@@ -161,21 +164,20 @@ class OBJECT_OT_AddBool(Operator):
                     
             for md in C.object.modifiers.keys():
                 if md.startswith("Weighted Normal"):
-                    Ops.modifier_move_up(modifier= Boolmod.name)
+                    O.modifier_move_up(modifier= Boolmod.name)
                 if md.startswith("angbev"):
-                    Ops.modifier_move_up(modifier= Boolmod.name)
+                    O.modifier_move_up(modifier= Boolmod.name)
                                            
-##---------------------------------- U N I O N -------------------------------------------##
-        
+##---------------------------------- U N I O N -------------------------------------------##       
         elif self.type == 2:
             Boolmod = C.object.modifiers.new("Boo_add", 'BOOLEAN')
             Boolmod.operation = 'UNION'
             for boolobj in C.selected_objects:
                 if boolobj != bool_target:
                     Boolmod.object = boolobj 
+
                               
 ##------------------------------- I N T E R S E C T -------------------------------------##
-        
         elif self.type == 3:
             Boolmod = C.object.modifiers.new("Boo_inter", 'BOOLEAN')
             Boolmod.operation = 'INTERSECT'
@@ -183,36 +185,44 @@ class OBJECT_OT_AddBool(Operator):
             for boolobj in C.selected_objects:
                 if boolobj != bool_target:
                     Boolmod.object = boolobj
-                              
+ 
+                             
 ##---------------------------------- S L I C E --------------------------------------------##
-        
         elif self.type == 4:
-            
-                
+                 
+            diffMod = bool_target.modifiers.new("Boo_diff_" + bool_target.name, "BOOLEAN")  # add mod to obj
+            diffMod.operation = 'DIFFERENCE'
+            for md in bool_target.modifiers.keys():
+                        if md.startswith("angbev"):
+                            O.modifier_move_up(modifier = diffMod.name)
             clone = bool_target.copy()
             context.collection.objects.link(clone)
-            cloneMod = clone.modifiers.new("Boo_int_" + clone.name, "BOOLEAN")  # add mod to clone obj
-            cloneMod.operation = "INTERSECT"
-            for md in clone.modifiers.keys():
-                if md.startswith("angbev"):
-                    Ops.modifier_move_up(modifier = cloneMod.name)
-                   
-            sliceMod = bool_target.modifiers.new("Boo_diff_" + bool_target.name, "BOOLEAN")  # add mod to clone obj
-            sliceMod.operation = "DIFFERENCE"
-            for md in bool_target.modifiers.keys():
-                if md.startswith("angbev"):
-                    Ops.modifier_move_up(modifier = sliceMod.name)
+            clMod = clone.modifiers.get(diffMod.name)
+            clMod.name = "Boo_int_" + bool_target.name  # add mod to clone obj
+            clMod.operation = 'INTERSECT' 
             
             for obj in C.selected_objects:
-                if obj != C.active_object and obj != clone:
+                if obj != bool_target and obj != clone:
                     obj.display_type = 'WIRE'
                     obj.name = "slicer"
                     obj.show_name = True
-                    cloneMod.object = obj
-                    sliceMod.object = obj
-
+                    obj.select_set(True)
+                    clMod.object = obj
+                    diffMod.object = obj
+                
+                elif obj == bool_target:
+                    obj.name = "target"
+                    obj.show_name = True
+                    obj.select_set(False)
+                    
+                elif obj == clone:
+                    obj.name = "CLONE"
+                    obj.show_name = True
+                    obj.select_set(False)
+                               
         return {'FINISHED'}
-    
+
+
 ##-------------------------------PARenting booleans------------------------------##
 class OBJECT_OT_AutoParent(Operator):
     bl_idname = "object.autoparent"
@@ -223,16 +233,18 @@ class OBJECT_OT_AutoParent(Operator):
     def execute(self,context):
         
         C = bpy.context
-        Ops = bpy.ops.object
+        O = bpy.ops.object
         parent_obj = C.active_object
         
         for obj in C.selected_objects:
-                if obj != parent_obj:
-                    Ops.parent_set(type='OBJECT', keep_transform=True)
+            if obj != parent_obj:
+                O.parent_set(type='OBJECT', keep_transform=True)
                     
         return {'FINISHED'}
+    
+
 ##-------------select cutters--------------##
-class CutSelect(Operator):
+class OBJECT_OT_CutSelect(Operator):
     bl_idname = "object.cutselect"
     bl_label = "select cutters"
     bl_description = "" 
@@ -243,33 +255,53 @@ class CutSelect(Operator):
     def execute(self,context):
         
         C = bpy.context
+        D = bpy.data
         
         if self.type == 1:
-            for obj in bpy.data.objects:
-                if obj.name.startswith('cutter'):
-                    bpy.ops.object.select_set(state=True)
+            for obj in D.objects:
+                if obj.name.startswith("cutter"):
+                    obj.select_set(True)
+                else:
+                    obj.select_set(False)
                      
         elif self.type == 2:
-            for obj in C.selectable_objects:
-                if obj.name.startswith('slicer'):
-                    bpy.ops.object.select_set(state=True) 
+            for obj in D.objects:
+                if obj.name.startswith("slicer"):
+                    obj.select_set(True)
+                else:
+                    obj.select_set(False)
+                    
 
         return {'FINISHED'} 
-##-------------hide cutters--------------##
+
+
+##------------- H I D E   B O O L E A N S  --------------##
 class CutHide(Operator):
     bl_idname = "object.cuthide"
     bl_label = "hide cutters"
     bl_description = "" 
     bl_options = {'REGISTER', 'UNDO'}
+    
+    type: bpy.props.IntProperty(name="Type")
             
     def execute(self,context):
-        
         C = bpy.context
+        O = bpy.ops.object
+        D = bpy.data
         
-        for obj in C.object.name.startswith('cutter'):
-            bpy.ops.object.hide_view_set(unselected=False)
+        if self.type == 1:
+            for obj in D.objects():
+                if obj.name.startswith("cutter"):
+                    O.hide_view_set(unselected=False)
+                    
+        if self.type == 2:
+            for obj in D.objects():
+                if obj.name.startswith("slicer"):
+                    O.hide_view_set(unselected=False)
 
-        return {'FINISHED'}       
+        return {'FINISHED'}
+    
+      
 ##------------------------------------- ADD BEVEL -----------------------------##    
 class OBJECT_OT_AddBevel(Operator):
     bl_idname = "object.add_bevel"
@@ -278,14 +310,14 @@ class OBJECT_OT_AddBevel(Operator):
     bl_options = {'REGISTER', 'UNDO'}
     
     type: bpy.props.IntProperty(name="Type")
-    bwidth: bpy.props.FloatProperty(name="Bwidth", default=0.02)
+    bwidth: bpy.props.FloatProperty(name="Bwidth",min = 0.001, default=0.006)
     segments = bpy.props.IntProperty(name="segments",min = 1, default = 4)
     
     def execute(self, context):
         
         C=bpy.context
         target=C.active_object
-        Ops = bpy.ops.object
+        O = bpy.ops.object
         
         if self.type == 1:
             bevMod = target.modifiers.new("angbev",'BEVEL')
@@ -297,11 +329,11 @@ class OBJECT_OT_AddBevel(Operator):
             bevMod.offset_type = 'WIDTH'
             bevMod.show_expanded = False
             
-            for mod in C.object.modifiers.keys():
-                if mod.startswith("wbev"):
-                    Ops.modifier_move_down(modifier = bevMod.name)
-                elif mod.startswith("Boo_"):
-                    Ops.modifier_move_down(modifier = bevMod.name)
+            for md in C.object.modifiers.keys():
+                if md.startswith("wbev"):
+                    O.modifier_move_down(modifier = bevMod.name)
+                elif md.startswith("Boo_int"):
+                    O.modifier_move_down(modifier = bevMod.name)
         
         if self.type == 2:
             bevMod = target.modifiers.new("wbev",'BEVEL')
@@ -309,14 +341,14 @@ class OBJECT_OT_AddBevel(Operator):
             bevMod.limit_method = 'WEIGHT'
             bevMod.offset_type = 'OFFSET'
             bevMod.show_expanded = False
-            bpy.ops.object.mode_set(mode='EDIT',toggle=True)
+            O.mode_set(mode='EDIT',toggle=True)
             bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='EDGE')
             
-            for mod in C.object.modifiers.keys():
-                if mod.startswith("angbev"):
-                    Ops.modifier_move_up(modifier = bevMod.name)
-                elif mod.startswith("Boo_"):
-                    Ops.modifier_move_up(modifier = bevMod.name)
+            for md in C.object.modifiers.keys():
+                if md.startswith("angbev"):
+                    O.modifier_move_up(modifier = bevMod.name)
+                elif md.startswith("Boo_int"):
+                    O.modifier_move_up(modifier = bevMod.name)
                     
         if self.type == 3:
             bevMod = target.modifiers.new("vertbev",'BEVEL')
@@ -325,22 +357,21 @@ class OBJECT_OT_AddBevel(Operator):
             bevMod.limit_method = 'VGROUP'
             bevMod.offset_type = 'OFFSET'   
             bevMod.show_expanded = False        
-            bpy.ops.object.mode_set(mode='EDIT',toggle=True)
+            O.mode_set(mode='EDIT',toggle=True)
             bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
             
-            for mod in C.object.modifiers.keys():   
-                if mod.startswith("angbev"):
-                    Ops.modifier_move_up(modifier = bevMod.name)
-                elif mod.startswith("wbev"):
-                    Ops.modifier_move_up(modifier = bevMod.name)
-                elif mod.startswith("Boo_"):
-                    Ops.modifier_move_up(modifier = bevMod.name)
+            for md in C.object.modifiers.keys():   
+                if md.startswith("angbev"):
+                    O.modifier_move_up(modifier = bevMod.name)
+                elif md.startswith("wbev"):
+                    O.modifier_move_up(modifier = bevMod.name)
+                elif md.startswith("Boo_"):
+                    O.modifier_move_up(modifier = bevMod.name)
         
         return {'FINISHED'}
 
     
 ##-------------------------------------TOGGLE WIRE DISPLAY-----------------------------##
-  
 class WireDisplay(Operator):
     bl_idname = "view3d.wire_dis"
     bl_label = "Wire mode"
@@ -359,8 +390,7 @@ class WireDisplay(Operator):
         return {'FINISHED'}
 
 
-##-----------------------------APPLY SMOOTSHADING AND AUTOSMOOTH AT 30°---------------------##
- 
+##-----------------------------APPLY SMOOTSHADING AND AUTOSMOOTH AT 30°---------------------## 
 class Autosmooth(Operator):
     bl_idname = "view3d.smooth_dis"
     bl_label = "QuickShading"
@@ -374,7 +404,9 @@ class Autosmooth(Operator):
         bpy.context.object.data.auto_smooth_angle = 0.523599
 
         return {'FINISHED'}
-
+  
+  
+##------------------ S O L I D I F Y --------------------------##
 class OBJECT_OT_AddSolidify(Operator):
     bl_idname = "object.add_solidify"
     bl_label = "solidify"
@@ -400,8 +432,8 @@ class OBJECT_OT_AddSolidify(Operator):
         
         return {'FINISHED'}
 
-## -------------------------- PIE MENU ----------------------------##
 
+## -------------------------- PIE MENU ----------------------------##
 class VIEW3D_PIE_addmod(Menu):
     bl_label = "Add Modifiers"
     
@@ -459,11 +491,16 @@ class VIEW3D_PIE_addmod(Menu):
         box.label(text="PARENTING")
         col = box.column(align=True)
         col.operator("object.autoparent", text="parenting")
+        
         prop = col.operator("object.cutselect", text="select Cutters")
         prop.type = 1
         prop = col.operator("object.cutselect", text="select Slicers")
         prop.type = 2
-        col.operator("object.cuthide", text="hide cutters")
+        
+        prop = col.operator("object.cuthide", text="hide cutters")
+        prop.type = 1
+        prop = col.operator("object.cuthide", text="hide slicers")
+        prop.type = 2
         
         box = pie.box()
         box.label(text="BOOLEANS")
@@ -475,6 +512,7 @@ class VIEW3D_PIE_addmod(Menu):
         row.operator("object.add_bool", text="Intersect", icon='MOD_BOOLEAN').type = 3
         row.operator("object.add_bool", text="Slice mf", icon='MOD_BOOLEAN').type = 4
 
+
 ##------------------------- REGISTER------------------------- ##
 classes = (
     SK_OT_SmartCursor,
@@ -483,7 +521,7 @@ classes = (
     OBJECT_OT_AddBool,
     OBJECT_OT_AddBevel,
     OBJECT_OT_AutoParent,
-    CutSelect,
+    OBJECT_OT_CutSelect,
     CutHide,
     WireDisplay,
     Autosmooth,
